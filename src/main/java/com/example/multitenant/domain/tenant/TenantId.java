@@ -1,5 +1,7 @@
 package com.example.multitenant.domain.tenant;
 
+import com.example.multitenant.domain.utils.ValidateUtil;
+
 /**
  * 멀티 테넌트 식별자
  * @author gihyung.lee
@@ -8,9 +10,7 @@ package com.example.multitenant.domain.tenant;
 public record TenantId(String value) {
 
     public TenantId {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("TenantId must not be empty");
-        }
+        ValidateUtil.validate("value", value);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.example.multitenant.infrastructure.datasource;
 
 import com.example.multitenant.domain.context.TenantContextHolder;
+import com.example.multitenant.infrastructure.exception.TenantContextMissingException;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 
 import javax.sql.DataSource;
@@ -21,9 +22,7 @@ public class RoutingDataSource extends AbstractRoutingDataSource {
     @Override
     protected Object determineCurrentLookupKey() {
         if (!contextHolder.hasTenant()) {
-            throw new IllegalStateException(
-                    "테넌트 컨텍스트가 없습니다. TenantInterceptor를 확인하세요."
-            );
+            throw new TenantContextMissingException();
         }
         return contextHolder.getTenant().value();
     }

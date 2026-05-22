@@ -6,8 +6,8 @@ import com.example.multitenant.application.port.in.command.RegisterTenantCommand
 import com.example.multitenant.application.port.in.RegisterTenantUseCase;
 import com.example.multitenant.application.port.in.results.GetTenantResult;
 import com.example.multitenant.application.port.in.results.RegisterTenantResult;
+import com.example.multitenant.interfaces.web.dto.ApiResponse;
 import com.example.multitenant.interfaces.web.dto.RegisterTenantRequest;
-import com.example.multitenant.interfaces.web.dto.TenantResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,7 +32,7 @@ public class TenantController {
     }
 
     @PostMapping
-    public ResponseEntity<TenantResponse> register(
+    public ResponseEntity<ApiResponse<RegisterTenantResult>> register(
             @Valid @RequestBody RegisterTenantRequest request) {
         RegisterTenantCommand command = new RegisterTenantCommand(
                 request.tenantId(),
@@ -45,13 +45,13 @@ public class TenantController {
 
         return ResponseEntity
                 .created(URI.create("/api/tenants/" + result.tenantId()))
-                .body(TenantResponse.from(result));
+                .body(ApiResponse.ok(result));
     }
 
     @GetMapping("/{tenantId}")
-    public ResponseEntity<TenantResponse> get(@PathVariable String tenantId) {
+    public ResponseEntity<ApiResponse<GetTenantResult>> get(@PathVariable String tenantId) {
         GetTenantCommand command = new GetTenantCommand(tenantId);
         GetTenantResult result = getUseCase.getById(command);
-        return ResponseEntity.ok(TenantResponse.from(result));
+        return ResponseEntity.ok(ApiResponse.ok(result));
     }
 }

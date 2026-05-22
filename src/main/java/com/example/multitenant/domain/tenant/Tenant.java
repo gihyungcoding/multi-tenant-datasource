@@ -46,7 +46,7 @@ public class Tenant {
     // 정지 상태로 변경
     public void suspend(String reason) {
         if (this.status instanceof TenantStatus.Suspended) {
-            throw new IllegalStateException("이미 정지된 테넌트입니다: " + id);
+            throw new TenantSuspendedException(id, reason);
         }
         this.status = new TenantStatus.Suspended(reason);
     }
@@ -64,8 +64,7 @@ public class Tenant {
         switch (status) {
             case TenantStatus.Active a   -> { /* 통과 */ }
             case TenantStatus.Suspended s ->
-                    throw new RuntimeException("정지된 테넌트입니다. tenantId=%s, reason=%s"
-                            .formatted(id, s.reason()));
+                    throw new TenantSuspendedException(id, s.reason());
         }
     }
 }

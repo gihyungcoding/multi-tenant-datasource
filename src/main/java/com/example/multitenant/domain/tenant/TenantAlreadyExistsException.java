@@ -1,0 +1,26 @@
+package com.example.multitenant.domain.tenant;
+
+import com.example.multitenant.domain.exception.DomainException;
+import com.example.multitenant.domain.exception.ErrorCode;
+
+import java.util.Collections;
+import java.util.Map;
+
+/**
+ * @author gihyung.lee
+ * @since 2026-05-22
+ */
+public class TenantAlreadyExistsException extends DomainException {
+
+    private final String tenantId;
+
+    public TenantAlreadyExistsException(TenantId tenantId) {
+        super(ErrorCode.TENANT_ALREADY_EXISTS);
+        this.tenantId = tenantId.value();
+    }
+
+    @Override
+    public Map<String, Object> getDetails() {
+        return Map.of("tenantId", tenantId);
+    }
+}

@@ -5,9 +5,7 @@ import com.example.multitenant.application.port.in.RegisterTenantUseCase;
 import com.example.multitenant.application.port.in.results.RegisterTenantResult;
 import com.example.multitenant.application.port.out.TenantDataSourcePort;
 import com.example.multitenant.application.port.out.TenantPersistencePort;
-import com.example.multitenant.domain.tenant.DataSourceSpec;
-import com.example.multitenant.domain.tenant.Tenant;
-import com.example.multitenant.domain.tenant.TenantId;
+import com.example.multitenant.domain.tenant.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +34,7 @@ public class RegisterTenantService implements RegisterTenantUseCase {
         );
 
         if (persistencePort.existsById(id)) {
-            throw new IllegalArgumentException("이미 존재하는 테넌트입니다: " + id);
+            throw new TenantAlreadyExistsException(id);
         }
 
         Tenant tenant = Tenant.create(id, spec);
