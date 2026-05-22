@@ -1,0 +1,30 @@
+services:
+  # 마스터 DB — 테넌트 목록 저장, 관리
+  master-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: master
+      POSTGRES_USER: master
+      POSTGRES_PASSWORD: master
+    ports:
+      - "5432:5432"
+
+  # 테넌트 A DB
+  tenant-a-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tenant_a
+      POSTGRES_USER: tenant_a
+      POSTGRES_PASSWORD: tenant_a
+    ports:
+      - "5433:5432"
+
+  # 테넌트 B DB
+  tenant-b-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tenant_b
+      POSTGRES_USER: tenant_b
+      POSTGRES_PASSWORD: tenant_b
+    ports:
+      - "5434:5432"
