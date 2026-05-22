@@ -34,3 +34,13 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# 환경 설정 (민감 정보)
+application.yml
+application-prod.yml
+application-secret.yml
+.env
+
+# OS
+.DS_Store
+Thumbs.db
