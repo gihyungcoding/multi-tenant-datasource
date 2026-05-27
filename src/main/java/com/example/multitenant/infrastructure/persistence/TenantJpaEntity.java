@@ -35,12 +35,13 @@ public class TenantJpaEntity {
 
     }
 
-    public TenantJpaEntity(String tenantId, String url, String username, String password, String status) {
+    public TenantJpaEntity(String tenantId, String url, String username, String password, String status, String suspendReason) {
         this.tenantId = tenantId;
         this.url = url;
         this.username = username;
         this.password = password;
         this.status = status;
+        this.suspendReason = suspendReason;
     }
 
     public String getTenantId() {

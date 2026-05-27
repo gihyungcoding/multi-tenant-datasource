@@ -14,11 +14,14 @@ public record GetTenantResult(
         String suspendReason
 ) {
     public static GetTenantResult from(Tenant tenant) {
-        return switch (tenant.getStatus()) {
-            case TenantStatus.Active a ->
-                    new GetTenantResult(tenant.getId().value(), "ACTIVE", null);
-            case TenantStatus.Suspended s ->
-                    new GetTenantResult(tenant.getId().value(), "SUSPENDED", s.reason());
-        };
+        TenantStatus status = tenant.getStatus();
+        String reason = status instanceof TenantStatus.Suspended s
+                ? s.reason() : null;
+
+        return new GetTenantResult(
+                tenant.getId().value(),
+                status.code(),
+                reason
+        );
     }
 }

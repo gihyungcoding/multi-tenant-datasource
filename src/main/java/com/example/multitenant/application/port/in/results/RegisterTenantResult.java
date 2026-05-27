@@ -13,10 +13,6 @@ public record RegisterTenantResult(
         String status
 ) {
     public static RegisterTenantResult from(Tenant tenant) {
-        String status = switch (tenant.getStatus()) {
-            case TenantStatus.Active a    -> "ACTIVE";
-            case TenantStatus.Suspended s -> "SUSPENDED";
-        };
-        return new RegisterTenantResult(tenant.getId().value(), status);
+        return new RegisterTenantResult(tenant.getId().value(), tenant.getStatus().code());
     }
 }

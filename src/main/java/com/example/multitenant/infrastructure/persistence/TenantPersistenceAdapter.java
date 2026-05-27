@@ -35,7 +35,7 @@ public class TenantPersistenceAdapter implements TenantPersistencePort {
 
     @Override
     public List<Tenant> findAllActive() {
-        return jpaRepository.findAllByStatus("ACTIVE")
+        return jpaRepository.findAllByStatus(TenantStatus.ACTIVE_CODE)
                 .stream()
                 .map(this::toDomain)
                 .toList();
@@ -48,16 +48,17 @@ public class TenantPersistenceAdapter implements TenantPersistencePort {
 
     // Entity <-> Domain Mapping
     private TenantJpaEntity toEntity(Tenant tenant) {
-        String status = switch (tenant.getStatus()) {
-            case TenantStatus.Active a    -> "ACTIVE";
-            case TenantStatus.Suspended s -> "SUSPENDED";
-        };
+        TenantStatus status = tenant.getStatus();
+        String reason = status instanceof TenantStatus.Suspended s
+                ? s.reason() : null;
+
         return new TenantJpaEntity(
                 tenant.getId().value(),
                 tenant.getDataSourceSpec().url(),
                 tenant.getDataSourceSpec().username(),
                 tenant.getDataSourceSpec().password(),
-                status
+                status.code(),
+                reason
         );
     }
     // Entity <-> Domain Mapping
@@ -68,9 +69,15 @@ public class TenantPersistenceAdapter implements TenantPersistencePort {
                 entity.getUsername(),
                 entity.getPassword()
         );
+
+        TenantStatus status = TenantStatus.from(
+                entity.getStatus(),
+                entity.getSuspendReason()
+        );
+
         Tenant tenant = Tenant.create(id, spec);
-        if ("SUSPENDED".equals(entity.getStatus())) {
-            tenant.suspend(entity.getSuspendReason());
+        if (status instanceof TenantStatus.Suspended s) {
+            tenant.suspend(s.reason());
         }
         return tenant;
     }

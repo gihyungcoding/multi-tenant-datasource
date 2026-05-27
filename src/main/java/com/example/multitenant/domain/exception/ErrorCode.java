@@ -13,6 +13,7 @@ public enum ErrorCode {
     TENANT_ALREADY_EXISTS   (HttpStatus.CONFLICT,             "이미 존재하는 테넌트입니다"),
     TENANT_SUSPENDED        (HttpStatus.FORBIDDEN,            "정지된 테넌트입니다"),
     TENANT_CONTEXT_MISSING  (HttpStatus.BAD_REQUEST,          "테넌트 컨텍스트가 없습니다. TenantInterceptor를 확인하세요."),
+    INVALID_ENUM_VALUE     (HttpStatus.BAD_REQUEST, "올바르지 않은 값 타입입니다."),
     INVALID_ESSENTIAL_ARGUMENT       (HttpStatus.BAD_REQUEST, "필수 인자가 올바르지 않습니다"),
 
     // 공통
