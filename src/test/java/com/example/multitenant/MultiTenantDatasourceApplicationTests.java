@@ -1,12 +1,11 @@
 package com.example.multitenant;
 
+import com.example.multitenant.annotation.LargeTest;
+import com.example.multitenant.integration.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 
-@Import(TestcontainersConfiguration.class)
-@SpringBootTest
-class MultiTenantDatasourceApplicationTests {
+@LargeTest
+class MultiTenantDatasourceApplicationTests extends IntegrationTestBase {
 
 	@Test
 	void contextLoads() {

@@ -15,7 +15,7 @@ public class TenantAlreadyExistsException extends DomainException {
     private final String tenantId;
 
     public TenantAlreadyExistsException(TenantId tenantId) {
-        super(ErrorCode.TENANT_ALREADY_EXISTS);
+        super(ErrorCode.TENANT_ALREADY_EXISTS, "이미 존재하는 테넌트입니다: " + tenantId.value());
         this.tenantId = tenantId.value();
     }
 

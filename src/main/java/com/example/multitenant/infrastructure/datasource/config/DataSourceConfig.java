@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 import javax.sql.DataSource;
+import java.util.Map;
 
 /**
  * DataSource 환경 설정
@@ -34,6 +35,13 @@ public class DataSourceConfig {
 
     @Bean
     public RoutingDataSource routingDataSource(TenantContextHolder contextHolder) {
-        return new RoutingDataSource(contextHolder);
+        RoutingDataSource routingDataSource = new RoutingDataSource(contextHolder);
+
+        // 빈 초기화 시점에 afterPropertiesSet() 검증 통과용 빈 맵 주입
+        // 실제 테넌트 DataSource는 SmartInitializingSingleton에서 채워짐
+        routingDataSource.setTargetDataSources(Map.of());
+        routingDataSource.afterPropertiesSet();
+
+        return routingDataSource;
     }
 }
