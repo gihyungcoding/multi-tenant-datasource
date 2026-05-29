@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    master:
+      driver-class-name: org.postgresql.Driver
+      # URL / username / password 는 @DynamicPropertySource 에서 주입
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
