@@ -1,13 +1,20 @@
 package com.example.multitenant.integration;
 
 import com.example.multitenant.annotation.LargeTest;
+import com.example.multitenant.application.port.in.ActivateTenantUseCase;
 import com.example.multitenant.application.port.in.RegisterTenantUseCase;
 import com.example.multitenant.application.port.in.ResolveTenantDataSourceUseCase;
+import com.example.multitenant.application.port.in.SuspendTenantUseCase;
+import com.example.multitenant.application.port.in.command.ActivateTenantCommand;
 import com.example.multitenant.application.port.in.command.RegisterTenantCommand;
 import com.example.multitenant.application.port.in.command.ResolveTenantCommand;
+import com.example.multitenant.application.port.in.command.SuspendTenantCommand;
 import com.example.multitenant.application.port.in.results.RegisterTenantResult;
 import com.example.multitenant.domain.context.TenantContextHolder;
+import com.example.multitenant.domain.tenant.TenantAlreadyActiveException;
+import com.example.multitenant.domain.tenant.TenantAlreadySuspendedException;
 import com.example.multitenant.domain.tenant.TenantId;
+import com.example.multitenant.domain.tenant.TenantSuspendedException;
 import com.example.multitenant.infrastructure.datasource.RoutingDataSource;
 import com.example.multitenant.infrastructure.exception.TenantContextMissingException;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,17 +40,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @LargeTest
 class TenantRoutingIntegrationTest extends IntegrationTestBase {
 
-    @Autowired
-    private RegisterTenantUseCase registerTenantUseCase;
-
-    @Autowired
-    private ResolveTenantDataSourceUseCase resolveTenantDataSourceUseCase;
-
-    @Autowired
-    private RoutingDataSource routingDataSource;
-
-    @Autowired
-    private TenantContextHolder contextHolder;
+    @Autowired private RegisterTenantUseCase           registerTenantUseCase;
+    @Autowired private SuspendTenantUseCase            suspendTenantUseCase;
+    @Autowired private ActivateTenantUseCase           activateTenantUseCase;
+    @Autowired private ResolveTenantDataSourceUseCase  resolveTenantDataSourceUseCase;
+    @Autowired private RoutingDataSource               routingDataSource;
+    @Autowired private TenantContextHolder             contextHolder;
 
     @BeforeEach
     void setUp() {
@@ -234,15 +236,75 @@ class TenantRoutingIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("clear() 호출 후 컨텍스트가 제거된다")
     void contextHolder_clear_removesContext() {
-        // given
         contextHolder.setTenant(new TenantId("tenant-clear"));
         assertThat(contextHolder.hasTenant()).isTrue();
 
-        // when
         contextHolder.clear();
 
-        // then
         assertThat(contextHolder.hasTenant()).isFalse();
         assertThat(contextHolder.getTenant()).isNull();
+    }
+
+    // ── 테넌트 생명주기 — 정지 · 재활성화 ────────────────────────
+
+    @Test
+    @DisplayName("정지 후 라우팅 시 TenantSuspendedException 발생")
+    void suspend_blocksRouting() {
+        // given
+        String tenantId = "tenant-lifecycle-suspend";
+        registerTenantUseCase.register(new RegisterTenantCommand(
+                tenantId, getTenantAUrl(), "tenant_a", "tenant_a"));
+
+        // when
+        suspendTenantUseCase.suspend(new SuspendTenantCommand(tenantId, "테스트 정지"));
+
+        // then
+        assertThatThrownBy(() ->
+                resolveTenantDataSourceUseCase.resolve(new ResolveTenantCommand(tenantId))
+        ).isInstanceOf(TenantSuspendedException.class);
+    }
+
+    @Test
+    @DisplayName("정지 후 재활성화하면 라우팅이 복구된다")
+    void activate_restoresRouting() {
+        // given
+        String tenantId = "tenant-lifecycle-activate";
+        registerTenantUseCase.register(new RegisterTenantCommand(
+                tenantId, getTenantAUrl(), "tenant_a", "tenant_a"));
+        suspendTenantUseCase.suspend(new SuspendTenantCommand(tenantId, "테스트 정지"));
+
+        // when
+        activateTenantUseCase.activate(new ActivateTenantCommand(tenantId));
+
+        // then — 재활성화 후 resolve 가 정상 동작
+        resolveTenantDataSourceUseCase.resolve(new ResolveTenantCommand(tenantId));
+        assertThat(contextHolder.hasTenant()).isTrue();
+        assertThat(contextHolder.getTenant().value()).isEqualTo(tenantId);
+        contextHolder.clear();
+    }
+
+    @Test
+    @DisplayName("이미 정지된 테넌트 재정지 시 TenantAlreadySuspendedException 발생")
+    void suspend_alreadySuspended_throwsConflict() {
+        String tenantId = "tenant-double-suspend";
+        registerTenantUseCase.register(new RegisterTenantCommand(
+                tenantId, getTenantAUrl(), "tenant_a", "tenant_a"));
+        suspendTenantUseCase.suspend(new SuspendTenantCommand(tenantId, "1차 정지"));
+
+        assertThatThrownBy(() ->
+                suspendTenantUseCase.suspend(new SuspendTenantCommand(tenantId, "2차 정지"))
+        ).isInstanceOf(TenantAlreadySuspendedException.class);
+    }
+
+    @Test
+    @DisplayName("이미 활성화된 테넌트 재활성화 시 TenantAlreadyActiveException 발생")
+    void activate_alreadyActive_throwsConflict() {
+        String tenantId = "tenant-double-activate";
+        registerTenantUseCase.register(new RegisterTenantCommand(
+                tenantId, getTenantAUrl(), "tenant_a", "tenant_a"));
+
+        assertThatThrownBy(() ->
+                activateTenantUseCase.activate(new ActivateTenantCommand(tenantId))
+        ).isInstanceOf(TenantAlreadyActiveException.class);
     }
 }

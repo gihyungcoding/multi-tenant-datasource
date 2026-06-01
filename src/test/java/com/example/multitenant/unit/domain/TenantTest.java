@@ -67,13 +67,13 @@ class TenantTest {
         }
 
         @Test
-        @DisplayName("이미 정지된 테넌트를 재정지하면 TenantSuspendedException 발생")
+        @DisplayName("이미 정지된 테넌트를 재정지하면 TenantAlreadySuspendedException 발생")
         void suspend_alreadySuspended_throwsException() {
             Tenant tenant = Tenant.create(tenantId, spec);
             tenant.suspend("1차 연체");
 
             assertThatThrownBy(() -> tenant.suspend("2차 연체"))
-                    .isInstanceOf(TenantSuspendedException.class);
+                    .isInstanceOf(TenantAlreadySuspendedException.class);
         }
     }
 

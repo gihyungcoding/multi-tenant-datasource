@@ -54,15 +54,27 @@ public class Tenant {
         return new Tenant(id, spec, status, createdAt);
     }
 
-    // 정지 상태로 변경
+    /**
+     * 테넌트를 정지한다.
+     *
+     * @throws TenantAlreadySuspendedException 이미 정지된 상태인 경우 (409 Conflict)
+     */
     public void suspend(String reason) {
         if (this.status instanceof TenantStatus.Suspended) {
-            throw new TenantSuspendedException(id, reason);
+            throw new TenantAlreadySuspendedException(id);
         }
         this.status = new TenantStatus.Suspended(reason);
     }
 
+    /**
+     * 테넌트를 재활성화한다.
+     *
+     * @throws TenantAlreadyActiveException 이미 활성 상태인 경우 (409 Conflict)
+     */
     public void activate() {
+        if (this.status instanceof TenantStatus.Active) {
+            throw new TenantAlreadyActiveException(id);
+        }
         this.status = new TenantStatus.Active();
     }
 

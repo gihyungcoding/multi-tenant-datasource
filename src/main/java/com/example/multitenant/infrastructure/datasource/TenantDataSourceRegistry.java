@@ -56,15 +56,28 @@ public class TenantDataSourceRegistry {
         }
     }
 
+    /**
+     * 테넌트 DataSource 를 제거하고, 제거 후 전체 맵의 스냅샷을 원자적으로 반환한다.
+     *
+     * <p>제거된 DataSource 는 {@link UnregisterResult#removed()} 로 반환된다.
+     * HikariCP 풀 종료는 락 보유 시간 최소화를 위해 호출자(어댑터)가 락 밖에서 처리한다.
+     * 라우팅 테이블 갱신({@code routingDataSource.refresh}) 이후 풀을 종료해야
+     * 신규 요청이 닫힌 풀에 도달하는 찰나의 창을 없앨 수 있기 때문이다.
+     *
+     * @return 제거 후 스냅샷 + 제거된 DataSource (미등록 테넌트면 removed = null)
+     */
+    public UnregisterResult unregisterAndSnapshot(TenantId tenantId) {
+        synchronized (this) {
+            DataSource removed = dataSourceMap.remove(tenantId.value());
+            return new UnregisterResult(Map.copyOf(dataSourceMap), removed);
+        }
+    }
+
     public boolean isRegistered(TenantId tenantId) {
         return dataSourceMap.containsKey(tenantId.value());
     }
 
-    /**
-     * 등록된 특정 테넌트의 DataSource 를 반환한다.
-     *
-     * @return 등록된 DataSource, 없으면 {@code null}
-     */
+    /** 등록된 DataSource 반환. 없으면 {@code null} */
     public DataSource get(TenantId tenantId) {
         return dataSourceMap.get(tenantId.value());
     }
@@ -78,6 +91,14 @@ public class TenantDataSourceRegistry {
     public Map<String, DataSource> snapshot() {
         return Map.copyOf(dataSourceMap);
     }
+
+    /**
+     * {@link #unregisterAndSnapshot} 의 반환 타입.
+     *
+     * @param snapshot 제거 후 전체 DataSource 맵의 불변 스냅샷
+     * @param removed  제거된 DataSource (미등록 테넌트면 {@code null})
+     */
+    public record UnregisterResult(Map<String, DataSource> snapshot, DataSource removed) {}
 
     private HikariDataSource createDataSource(TenantId tenantId, DataSourceSpec spec) {
         HikariConfig config = new HikariConfig();

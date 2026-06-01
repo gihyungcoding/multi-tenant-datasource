@@ -9,6 +9,8 @@ import com.example.multitenant.domain.tenant.TenantId;
  */
 public interface TenantDataSourcePort {
     void register(TenantId id, DataSourceSpec spec);
+    /** 라우팅 테이블에서 제거하고 HikariCP 풀을 종료한다. */
+    void deregister(TenantId id);
     boolean isRegistered(TenantId id);
     void refreshRoutingTable();
 }
