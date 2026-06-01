@@ -31,7 +31,7 @@ public class DemoService implements SaveDemoMessageUseCase, GetDemoMessagesUseCa
     }
 
     @Override
-    @Transactional
+    @Transactional("tenantTransactionManager")
     public DemoMessageResult save(SaveDemoMessageCommand command) {
         String tenantId = contextHolder.getTenant().value();
         DemoMessage saved = demoMessagePort.save(DemoMessage.create(tenantId, command.content()));
@@ -39,7 +39,7 @@ public class DemoService implements SaveDemoMessageUseCase, GetDemoMessagesUseCa
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(value = "tenantTransactionManager", readOnly = true)
     public List<DemoMessageResult> findAll() {
         return demoMessagePort.findAll()
                 .stream()

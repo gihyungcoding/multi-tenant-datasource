@@ -7,6 +7,7 @@ import com.example.multitenant.domain.tenant.TenantId;
 import com.example.multitenant.infrastructure.datasource.RoutingDataSource;
 import com.example.multitenant.infrastructure.datasource.TenantDataSourceAdapter;
 import com.example.multitenant.infrastructure.datasource.TenantDataSourceRegistry;
+import com.example.multitenant.infrastructure.datasource.TenantSchemaInitializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -103,6 +104,11 @@ class TenantDataSourceAdapterConcurrencyTest {
         }
 
         @Override
+        public DataSource get(TenantId tenantId) {
+            return fakeMap.get(tenantId.value()); // fakeMap 사용 (부모의 dataSourceMap 우회)
+        }
+
+        @Override
         public boolean isRegistered(TenantId tenantId) {
             return fakeMap.containsKey(tenantId.value());
         }
@@ -158,9 +164,11 @@ class TenantDataSourceAdapterConcurrencyTest {
     private static final DataSourceSpec DUMMY_SPEC =
             new DataSourceSpec("jdbc:fake://host/db", "user", "pass");
 
+    // 스키마 초기화는 이 테스트의 관심사가 아니므로 no-op mock 으로 대체
+    private final TenantSchemaInitializer      noOpSchema    = mock(TenantSchemaInitializer.class);
     private final FakeTenantDataSourceRegistry fakeRegistry  = new FakeTenantDataSourceRegistry();
     private final InspectableRoutingDataSource routing       = new InspectableRoutingDataSource(dummyCtx);
-    private final TenantDataSourceAdapter      adapter       = new TenantDataSourceAdapter(fakeRegistry, routing);
+    private final TenantDataSourceAdapter      adapter       = new TenantDataSourceAdapter(fakeRegistry, routing, noOpSchema);
 
     // ── 테스트 ─────────────────────────────────────────────────────────────
 
@@ -241,7 +249,7 @@ class TenantDataSourceAdapterConcurrencyTest {
             InspectableRoutingDataSource racyRouting =
                     new InspectableRoutingDataSource(dummyCtx);
             TenantDataSourceAdapter racyAdapter =
-                    new TenantDataSourceAdapter(racyRegistry, racyRouting);
+                    new TenantDataSourceAdapter(racyRegistry, racyRouting, mock(TenantSchemaInitializer.class));
 
             CountDownLatch ready = new CountDownLatch(count);
             CountDownLatch start = new CountDownLatch(1);

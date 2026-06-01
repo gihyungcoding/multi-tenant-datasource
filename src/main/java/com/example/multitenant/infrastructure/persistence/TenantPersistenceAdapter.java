@@ -46,11 +46,11 @@ public class TenantPersistenceAdapter implements TenantPersistencePort {
         return jpaRepository.existsById(id.value());
     }
 
-    // Entity <-> Domain Mapping
+    // ── Entity ↔ Domain 변환 ─────────────────────────────────────────────────
+
     private TenantJpaEntity toEntity(Tenant tenant) {
         TenantStatus status = tenant.getStatus();
-        String reason = status instanceof TenantStatus.Suspended s
-                ? s.reason() : null;
+        String reason = status instanceof TenantStatus.Suspended s ? s.reason() : null;
 
         return new TenantJpaEntity(
                 tenant.getId().value(),
@@ -58,27 +58,22 @@ public class TenantPersistenceAdapter implements TenantPersistencePort {
                 tenant.getDataSourceSpec().username(),
                 tenant.getDataSourceSpec().password(),
                 status.code(),
-                reason
+                reason,
+                tenant.getCreatedAt()   // DB 저장 — create() 시점 이후 불변
         );
     }
-    // Entity <-> Domain Mapping
+
+    /**
+     * DB 레코드로부터 테넌트 도메인 객체를 복원한다.
+     *
+     * <p>{@link Tenant#create}가 아닌 {@link Tenant#restore}를 사용하여
+     * 로드 시점의 현재 시각이 {@code createdAt}을 덮어쓰는 버그를 방지한다.
+     */
     private Tenant toDomain(TenantJpaEntity entity) {
-        TenantId id = new TenantId(entity.getTenantId());
-        DataSourceSpec spec = new DataSourceSpec(
-                entity.getUrl(),
-                entity.getUsername(),
-                entity.getPassword()
-        );
+        TenantId       id     = new TenantId(entity.getTenantId());
+        DataSourceSpec spec   = new DataSourceSpec(entity.getUrl(), entity.getUsername(), entity.getPassword());
+        TenantStatus   status = TenantStatus.from(entity.getStatus(), entity.getSuspendReason());
 
-        TenantStatus status = TenantStatus.from(
-                entity.getStatus(),
-                entity.getSuspendReason()
-        );
-
-        Tenant tenant = Tenant.create(id, spec);
-        if (status instanceof TenantStatus.Suspended s) {
-            tenant.suspend(s.reason());
-        }
-        return tenant;
+        return Tenant.restore(id, spec, status, entity.getCreatedAt());
     }
 }

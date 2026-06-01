@@ -15,13 +15,16 @@ import java.util.Map;
 @Component
 public class TenantDataSourceAdapter implements TenantDataSourcePort {
 
-    private final TenantDataSourceRegistry registry;
-    private final RoutingDataSource routingDataSource;
+    private final TenantDataSourceRegistry  registry;
+    private final RoutingDataSource          routingDataSource;
+    private final TenantSchemaInitializer    schemaInitializer;
 
     public TenantDataSourceAdapter(TenantDataSourceRegistry registry,
-                                   RoutingDataSource routingDataSource) {
-        this.registry = registry;
+                                   RoutingDataSource routingDataSource,
+                                   TenantSchemaInitializer schemaInitializer) {
+        this.registry          = registry;
         this.routingDataSource = routingDataSource;
+        this.schemaInitializer = schemaInitializer;
     }
 
     /**
@@ -51,6 +54,9 @@ public class TenantDataSourceAdapter implements TenantDataSourcePort {
     @Override
     public synchronized void register(TenantId tenantId, DataSourceSpec spec) {
         Map<String, DataSource> snapshot = registry.registerAndSnapshot(tenantId, spec);
+        // 테넌트 DB 스키마 초기화 — demo_message 테이블 및 시퀀스를 생성한다.
+        // IF NOT EXISTS 구문으로 멱등하게 동작하므로 재기동 시에도 안전하다.
+        schemaInitializer.initialize(registry.get(tenantId));
         routingDataSource.refresh(snapshot);
     }
 

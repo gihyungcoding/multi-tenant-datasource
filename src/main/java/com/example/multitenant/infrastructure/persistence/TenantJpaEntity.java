@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 
 /**
  * 테넌트 엔티티
@@ -31,17 +32,22 @@ public class TenantJpaEntity {
 
     private String suspendReason;
 
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     protected TenantJpaEntity() {
 
     }
 
-    public TenantJpaEntity(String tenantId, String url, String username, String password, String status, String suspendReason) {
-        this.tenantId = tenantId;
-        this.url = url;
-        this.username = username;
-        this.password = password;
-        this.status = status;
+    public TenantJpaEntity(String tenantId, String url, String username, String password,
+                           String status, String suspendReason, LocalDateTime createdAt) {
+        this.tenantId      = tenantId;
+        this.url           = url;
+        this.username      = username;
+        this.password      = password;
+        this.status        = status;
         this.suspendReason = suspendReason;
+        this.createdAt     = createdAt;
     }
 
     public String getTenantId() {
@@ -64,5 +70,6 @@ public class TenantJpaEntity {
         return status;
     }
 
-    String getSuspendReason(){ return suspendReason; }
+    String getSuspendReason()        { return suspendReason; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
 }

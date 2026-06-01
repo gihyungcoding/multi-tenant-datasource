@@ -60,6 +60,20 @@ public class TenantDataSourceRegistry {
         return dataSourceMap.containsKey(tenantId.value());
     }
 
+    /**
+     * 등록된 특정 테넌트의 DataSource 를 반환한다.
+     *
+     * @return 등록된 DataSource, 없으면 {@code null}
+     */
+    public DataSource get(TenantId tenantId) {
+        return dataSourceMap.get(tenantId.value());
+    }
+
+    /** 현재 등록된 테넌트 DataSource 수 — Micrometer Gauge 등록에 사용 */
+    public int size() {
+        return dataSourceMap.size();
+    }
+
     // RoutingDataSource 초기 로딩(SmartInitializingSingleton) 전용
     public Map<String, DataSource> snapshot() {
         return Map.copyOf(dataSourceMap);
