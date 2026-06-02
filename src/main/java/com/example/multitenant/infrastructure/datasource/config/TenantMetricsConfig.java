@@ -48,7 +48,7 @@ public class TenantMetricsConfig {
      * 실시간으로 읽으므로, 테넌트 등록/해제가 발생하면 자동으로 반영된다.
      */
     @Bean
-    MeterBinder tenantDatasourceGauge(TenantDataSourceRegistry registry) {
+    public MeterBinder tenantDatasourceGauge(TenantDataSourceRegistry registry) {
         return (MeterRegistry meterRegistry) ->
                 Gauge.builder("tenant.datasource.active", registry, TenantDataSourceRegistry::size)
                         .description("현재 라우팅 가능한 테넌트 DataSource 수")
