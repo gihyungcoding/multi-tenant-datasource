@@ -4,6 +4,7 @@ import com.example.multitenant.annotation.MediumTest;
 import com.example.multitenant.application.port.in.ResolveTenantDataSourceUseCase;
 import com.example.multitenant.demo.application.DemoMessageResult;
 import com.example.multitenant.domain.context.TenantContextHolder;
+import com.example.multitenant.infrastructure.datasource.TenantRequestTracker;
 import com.example.multitenant.demo.application.port.in.GetDemoMessagesUseCase;
 import com.example.multitenant.demo.application.port.in.SaveDemoMessageUseCase;
 import com.example.multitenant.demo.interfaces.DemoController;
@@ -45,6 +46,7 @@ class DemoControllerTest {
     // its dependencies must be mocked so the context starts.
     @MockitoBean ResolveTenantDataSourceUseCase resolveTenantDataSourceUseCase;
     @MockitoBean TenantContextHolder            tenantContextHolder;
+    @MockitoBean TenantRequestTracker           tenantRequestTracker;
 
     private static final LocalDateTime NOW     = LocalDateTime.of(2026, 5, 28, 9, 0);
     private static final String        TENANT  = "tenant-a";

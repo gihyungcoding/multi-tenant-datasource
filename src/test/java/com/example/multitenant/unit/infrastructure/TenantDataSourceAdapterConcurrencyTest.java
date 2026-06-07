@@ -7,6 +7,7 @@ import com.example.multitenant.domain.tenant.TenantId;
 import com.example.multitenant.infrastructure.datasource.RoutingDataSource;
 import com.example.multitenant.infrastructure.datasource.TenantDataSourceAdapter;
 import com.example.multitenant.infrastructure.datasource.TenantDataSourceRegistry;
+import com.example.multitenant.infrastructure.datasource.TenantRequestTracker;
 import com.example.multitenant.infrastructure.datasource.TenantSchemaInitializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -168,7 +169,7 @@ class TenantDataSourceAdapterConcurrencyTest {
     private final TenantSchemaInitializer      noOpSchema    = mock(TenantSchemaInitializer.class);
     private final FakeTenantDataSourceRegistry fakeRegistry  = new FakeTenantDataSourceRegistry();
     private final InspectableRoutingDataSource routing       = new InspectableRoutingDataSource(dummyCtx);
-    private final TenantDataSourceAdapter      adapter       = new TenantDataSourceAdapter(fakeRegistry, routing, noOpSchema);
+    private final TenantDataSourceAdapter      adapter       = new TenantDataSourceAdapter(fakeRegistry, routing, noOpSchema, mock(TenantRequestTracker.class));
 
     // ── 테스트 ─────────────────────────────────────────────────────────────
 
@@ -249,7 +250,7 @@ class TenantDataSourceAdapterConcurrencyTest {
             InspectableRoutingDataSource racyRouting =
                     new InspectableRoutingDataSource(dummyCtx);
             TenantDataSourceAdapter racyAdapter =
-                    new TenantDataSourceAdapter(racyRegistry, racyRouting, mock(TenantSchemaInitializer.class));
+                    new TenantDataSourceAdapter(racyRegistry, racyRouting, mock(TenantSchemaInitializer.class), mock(TenantRequestTracker.class));
 
             CountDownLatch ready = new CountDownLatch(count);
             CountDownLatch start = new CountDownLatch(1);

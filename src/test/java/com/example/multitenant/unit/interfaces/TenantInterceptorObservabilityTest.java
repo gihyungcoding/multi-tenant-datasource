@@ -4,6 +4,7 @@ import com.example.multitenant.annotation.SmallTest;
 import com.example.multitenant.application.port.in.ResolveTenantDataSourceUseCase;
 import com.example.multitenant.application.port.in.command.ResolveTenantCommand;
 import com.example.multitenant.domain.context.TenantContextHolder;
+import com.example.multitenant.infrastructure.datasource.TenantRequestTracker;
 import com.example.multitenant.interfaces.interceptor.TenantInterceptor;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -36,10 +37,11 @@ import static org.mockito.Mockito.verify;
 @DisplayName("TenantInterceptor - MDC / Micrometer 동작")
 class TenantInterceptorObservabilityTest {
 
-    private SimpleMeterRegistry           meterRegistry;
+    private SimpleMeterRegistry            meterRegistry;
     private ResolveTenantDataSourceUseCase resolveUseCase;
     private TenantContextHolder            contextHolder;
-    private TenantInterceptor             interceptor;
+    private TenantRequestTracker           requestTracker;
+    private TenantInterceptor              interceptor;
 
     private MockHttpServletRequest  request;
     private MockHttpServletResponse response;
@@ -48,10 +50,11 @@ class TenantInterceptorObservabilityTest {
 
     @BeforeEach
     void setUp() {
-        meterRegistry = new SimpleMeterRegistry();
+        meterRegistry  = new SimpleMeterRegistry();
         resolveUseCase = mock(ResolveTenantDataSourceUseCase.class);
         contextHolder  = mock(TenantContextHolder.class);
-        interceptor    = new TenantInterceptor(resolveUseCase, contextHolder, meterRegistry);
+        requestTracker = mock(TenantRequestTracker.class);
+        interceptor    = new TenantInterceptor(resolveUseCase, contextHolder, requestTracker, meterRegistry);
 
         request  = new MockHttpServletRequest();
         response = new MockHttpServletResponse();

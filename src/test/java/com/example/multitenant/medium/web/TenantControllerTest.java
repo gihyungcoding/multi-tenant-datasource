@@ -7,6 +7,7 @@ import com.example.multitenant.application.port.in.RegisterTenantUseCase;
 import com.example.multitenant.application.port.in.ResolveTenantDataSourceUseCase;
 import com.example.multitenant.application.port.in.SuspendTenantUseCase;
 import com.example.multitenant.domain.context.TenantContextHolder;
+import com.example.multitenant.infrastructure.datasource.TenantRequestTracker;
 import com.example.multitenant.application.port.in.results.ActivateTenantResult;
 import com.example.multitenant.application.port.in.results.GetTenantResult;
 import com.example.multitenant.application.port.in.results.RegisterTenantResult;
@@ -55,6 +56,7 @@ class TenantControllerTest {
     // its dependencies must be mocked so the context starts.
     @MockitoBean ResolveTenantDataSourceUseCase resolveTenantDataSourceUseCase;
     @MockitoBean TenantContextHolder            tenantContextHolder;
+    @MockitoBean TenantRequestTracker           tenantRequestTracker;
 
     // ── POST /api/tenants ──────────────────────────────────────
 
