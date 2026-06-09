@@ -11,13 +11,15 @@ public class Tenant {
 
     private final TenantId id;
     private final DataSourceSpec dataSourceSpec;
+    private final DataSourceSpec slaveDataSourceSpec; // null 이면 master 단일 구성
     private TenantStatus status;
     private LocalDateTime createdAt;
 
-    private Tenant(TenantId id, DataSourceSpec dataSourceSpec,
+    private Tenant(TenantId id, DataSourceSpec dataSourceSpec, DataSourceSpec slaveDataSourceSpec,
                    TenantStatus status, LocalDateTime createdAt) {
         this.id = id;
         this.dataSourceSpec = dataSourceSpec;
+        this.slaveDataSourceSpec = slaveDataSourceSpec;
         this.status = status;
         this.createdAt = createdAt;
     }
@@ -30,6 +32,11 @@ public class Tenant {
         return dataSourceSpec;
     }
 
+    /** null 이면 slave 미구성 → master 단독 운영 */
+    public DataSourceSpec getSlaveDataSourceSpec() {
+        return slaveDataSourceSpec;
+    }
+
     public TenantStatus getStatus() {
         return status;
     }
@@ -39,8 +46,8 @@ public class Tenant {
     }
 
     // 생성 팩토리 메서드 — 최초 등록 시 사용. createdAt 을 현재 시각으로 설정한다.
-    public static Tenant create(TenantId id, DataSourceSpec spec) {
-        return new Tenant(id, spec, new TenantStatus.Active(), LocalDateTime.now());
+    public static Tenant create(TenantId id, DataSourceSpec masterSpec, DataSourceSpec slaveSpec) {
+        return new Tenant(id, masterSpec, slaveSpec, new TenantStatus.Active(), LocalDateTime.now());
     }
 
     /**
@@ -49,9 +56,9 @@ public class Tenant {
      * <p>{@link #create} 와 달리 모든 필드를 인자로 받으므로
      * {@code createdAt} 이 로드 시점의 현재 시각으로 덮어씌워지는 버그를 방지한다.
      */
-    public static Tenant restore(TenantId id, DataSourceSpec spec,
+    public static Tenant restore(TenantId id, DataSourceSpec masterSpec, DataSourceSpec slaveSpec,
                                  TenantStatus status, LocalDateTime createdAt) {
-        return new Tenant(id, spec, status, createdAt);
+        return new Tenant(id, masterSpec, slaveSpec, status, createdAt);
     }
 
     /**

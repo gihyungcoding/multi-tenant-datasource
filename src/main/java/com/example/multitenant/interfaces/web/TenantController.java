@@ -57,9 +57,13 @@ public class TenantController {
     @PostMapping
     public ResponseEntity<ApiResponse<RegisterTenantResult>> register(
             @Valid @RequestBody RegisterTenantRequest request) {
+        RegisterTenantCommand.SlaveSpec slaveSpec = request.slave() != null
+                ? new RegisterTenantCommand.SlaveSpec(
+                        request.slave().url(), request.slave().username(), request.slave().password())
+                : null;
         RegisterTenantResult result = registerUseCase.register(
                 new RegisterTenantCommand(request.tenantId(), request.url(),
-                        request.username(), request.password()));
+                        request.username(), request.password(), slaveSpec));
 
         return ResponseEntity
                 .created(URI.create("/api/tenants/" + result.tenantId()))

@@ -99,19 +99,21 @@ class TenantDataSourceAdapterConcurrencyTest {
         protected final Map<String, DataSource> fakeMap = new ConcurrentHashMap<>();
 
         @Override
-        public Map<String, DataSource> registerAndSnapshot(TenantId tenantId, DataSourceSpec spec) {
-            fakeMap.put(tenantId.value(), mock(DataSource.class));
+        public Map<String, DataSource> registerAndSnapshot(TenantId tenantId,
+                                                           DataSourceSpec masterSpec,
+                                                           DataSourceSpec slaveSpec) {
+            fakeMap.put(tenantId.value() + ":master", mock(DataSource.class));
             return Map.copyOf(fakeMap);
         }
 
         @Override
-        public DataSource get(TenantId tenantId) {
-            return fakeMap.get(tenantId.value()); // fakeMap 사용 (부모의 dataSourceMap 우회)
+        public DataSource getMaster(TenantId tenantId) {
+            return fakeMap.get(tenantId.value() + ":master");
         }
 
         @Override
         public boolean isRegistered(TenantId tenantId) {
-            return fakeMap.containsKey(tenantId.value());
+            return fakeMap.containsKey(tenantId.value() + ":master");
         }
 
         @Override
@@ -139,8 +141,10 @@ class TenantDataSourceAdapterConcurrencyTest {
         private static final long SLEEP_MS = 1L;
 
         @Override
-        public Map<String, DataSource> registerAndSnapshot(TenantId tenantId, DataSourceSpec spec) {
-            fakeMap.put(tenantId.value(), mock(DataSource.class));
+        public Map<String, DataSource> registerAndSnapshot(TenantId tenantId,
+                                                           DataSourceSpec masterSpec,
+                                                           DataSourceSpec slaveSpec) {
+            fakeMap.put(tenantId.value() + ":master", mock(DataSource.class));
             Map<String, DataSource> snap = Map.copyOf(fakeMap); // 스냅샷 즉시 포착
             try {
                 Thread.sleep(SLEEP_MS); // 다른 스레드의 register 를 허용하는 시간 창 (구버전에서 race 유발)
@@ -189,21 +193,21 @@ class TenantDataSourceAdapterConcurrencyTest {
         @DisplayName("[버그 패턴] routing.refresh(staleSnapshot) 은 라우팅 테이블을 오염시킨다")
         void routingRefresh_withStaleSnapshot_corruptsRoutingTable() {
             // Thread A: tenant-a 등록 직후 stale snapshot 포착
-            fakeRegistry.registerAndSnapshot(new TenantId("tenant-a"), DUMMY_SPEC);
-            Map<String, DataSource> staleSnapshot = Map.copyOf(fakeRegistry.snapshot()); // {tenant-a}
+            fakeRegistry.registerAndSnapshot(new TenantId("tenant-a"), DUMMY_SPEC, null);
+            Map<String, DataSource> staleSnapshot = Map.copyOf(fakeRegistry.snapshot()); // {"tenant-a:master"}
 
             // Thread B: tenant-b 등록 → 올바른 스냅샷으로 refresh 완료
-            fakeRegistry.registerAndSnapshot(new TenantId("tenant-b"), DUMMY_SPEC);
-            routing.refresh(fakeRegistry.snapshot()); // {tenant-a, tenant-b}
-            assertThat(routing.routes()).as("Thread B refresh 직후").containsKeys("tenant-a", "tenant-b");
+            fakeRegistry.registerAndSnapshot(new TenantId("tenant-b"), DUMMY_SPEC, null);
+            routing.refresh(fakeRegistry.snapshot()); // {"tenant-a:master", "tenant-b:master"}
+            assertThat(routing.routes()).as("Thread B refresh 직후").containsKeys("tenant-a:master", "tenant-b:master");
 
             // Thread A: 뒤늦게 stale snapshot 으로 refresh → tenant-b 소멸
-            routing.refresh(staleSnapshot); // {tenant-a} only — STALE OVERWRITE
+            routing.refresh(staleSnapshot); // {"tenant-a:master"} only — STALE OVERWRITE
 
             // 이것이 버그다: adapter.register() 의 synchronized 가 이 시나리오를 방지한다
             assertThat(routing.routes())
                     .as("stale refresh 는 라우팅 테이블을 오염시킨다 — adapter.synchronized 가 이를 방지해야 함")
-                    .doesNotContainKey("tenant-b"); // stale refresh 로 tenant-b 가 실제로 사라짐을 확인
+                    .doesNotContainKey("tenant-b:master"); // stale refresh 로 tenant-b 가 실제로 사라짐을 확인
         }
     }
 
@@ -220,12 +224,12 @@ class TenantDataSourceAdapterConcurrencyTest {
         @Test
         @DisplayName("[수정 검증] 두 테넌트를 순서대로 등록하면 라우팅 테이블에 모두 존재한다")
         void register_twoTenantsSequentially_bothInRoutingTable() {
-            adapter.register(new TenantId("tenant-a"), DUMMY_SPEC);
-            adapter.register(new TenantId("tenant-b"), DUMMY_SPEC);
+            adapter.register(new TenantId("tenant-a"), DUMMY_SPEC, null);
+            adapter.register(new TenantId("tenant-b"), DUMMY_SPEC, null);
 
             assertThat(routing.routes())
                     .as("두 테넌트 모두 라우팅 테이블에 존재해야 한다")
-                    .containsKeys("tenant-a", "tenant-b");
+                    .containsKeys("tenant-a:master", "tenant-b:master");
         }
 
         /**
@@ -267,7 +271,7 @@ class TenantDataSourceAdapterConcurrencyTest {
                             Thread.currentThread().interrupt();
                             return;
                         }
-                        racyAdapter.register(new TenantId(tenantId), DUMMY_SPEC);
+                        racyAdapter.register(new TenantId(tenantId), DUMMY_SPEC, null);
                         done.countDown();
                     });
                 }

@@ -51,15 +51,19 @@ public class TenantPersistenceAdapter implements TenantPersistencePort {
     private TenantJpaEntity toEntity(Tenant tenant) {
         TenantStatus status = tenant.getStatus();
         String reason = status instanceof TenantStatus.Suspended s ? s.reason() : null;
+        DataSourceSpec slave = tenant.getSlaveDataSourceSpec();
 
         return new TenantJpaEntity(
                 tenant.getId().value(),
                 tenant.getDataSourceSpec().url(),
                 tenant.getDataSourceSpec().username(),
                 tenant.getDataSourceSpec().password(),
+                slave != null ? slave.url()      : null,
+                slave != null ? slave.username() : null,
+                slave != null ? slave.password() : null,
                 status.code(),
                 reason,
-                tenant.getCreatedAt()   // DB 저장 — create() 시점 이후 불변
+                tenant.getCreatedAt()
         );
     }
 
@@ -70,10 +74,13 @@ public class TenantPersistenceAdapter implements TenantPersistencePort {
      * 로드 시점의 현재 시각이 {@code createdAt}을 덮어쓰는 버그를 방지한다.
      */
     private Tenant toDomain(TenantJpaEntity entity) {
-        TenantId       id     = new TenantId(entity.getTenantId());
-        DataSourceSpec spec   = new DataSourceSpec(entity.getUrl(), entity.getUsername(), entity.getPassword());
-        TenantStatus   status = TenantStatus.from(entity.getStatus(), entity.getSuspendReason());
+        TenantId       id          = new TenantId(entity.getTenantId());
+        DataSourceSpec masterSpec  = new DataSourceSpec(entity.getUrl(), entity.getUsername(), entity.getPassword());
+        DataSourceSpec slaveSpec   = entity.getSlaveUrl() != null
+                ? new DataSourceSpec(entity.getSlaveUrl(), entity.getSlaveUsername(), entity.getSlavePassword())
+                : null;
+        TenantStatus   status      = TenantStatus.from(entity.getStatus(), entity.getSuspendReason());
 
-        return Tenant.restore(id, spec, status, entity.getCreatedAt());
+        return Tenant.restore(id, masterSpec, slaveSpec, status, entity.getCreatedAt());
     }
 }

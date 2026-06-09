@@ -34,7 +34,8 @@ public class TenantDataSourceInitializer implements SmartInitializingSingleton  
         persistencePort.findAllActive().forEach(tenant -> {
             dataSourcePort.register(
                     tenant.getId(),
-                    tenant.getDataSourceSpec()
+                    tenant.getDataSourceSpec(),
+                    tenant.getSlaveDataSourceSpec()
             );
             log.info("테넌트 등록: {}", tenant.getId());
         });

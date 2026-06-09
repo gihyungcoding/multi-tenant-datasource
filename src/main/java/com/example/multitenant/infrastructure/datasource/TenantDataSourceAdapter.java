@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -37,15 +38,12 @@ import java.util.concurrent.locks.LockSupport;
  * {@link #waitUntilDrained} 는 두 가지 카운터가 동시에 0이 될 때 종료한다.
  * <ul>
  *   <li>HTTP 요청 카운터: {@link TenantRequestTracker#activeRequests} — 진행 중인 HTTP 요청</li>
- *   <li>DB 커넥션 카운터: {@link HikariPoolMXBean#getActiveConnections} — 사용 중인 DB 커넥션</li>
+ *   <li>DB 커넥션 카운터: master + slave 풀의 활성 커넥션 합산</li>
  * </ul>
- * HTTP 요청이 먼저 완료되면 DB 커넥션도 반납되므로 두 조건이 함께 0이 되는 것이 정상이다.
- * 어느 쪽이든 먼저 드레인된다면 나머지가 0이 될 때까지 계속 대기한다.
  *
  * <h2>synchronized 범위</h2>
  * {@code deregister} 의 {@code synchronized} 블록은 라우팅 갱신까지만 보호하고
  * 비동기 드레인 태스크 <em>예약</em> 후 즉시 반환된다.
- * 실제 드레인 루프와 {@code close()} 는 락 밖 Virtual Thread 에서 실행된다.
  *
  * @author gihyung.lee
  * @since 2026-05-21
@@ -98,40 +96,27 @@ public class TenantDataSourceAdapter implements TenantDataSourcePort {
     }
 
     /**
-     * 테넌트 DataSource 를 등록하고 라우팅 테이블을 갱신한다.
+     * 테넌트 DataSource(master + 옵션 slave) 를 등록하고 라우팅 테이블을 갱신한다.
      *
-     * <p><b>왜 synchronized 인가</b><br>
-     * {@link TenantDataSourceRegistry#registerAndSnapshot} 은 등록과 스냅샷 포착을 원자적으로
-     * 수행하지만, {@link RoutingDataSource#refresh} 는 별도 호출이다.
-     * synchronized 없이는 stale snapshot 이 나중에 적용되어 다른 테넌트의 라우팅을 덮어쓸 수 있다.
+     * <p>스키마 초기화는 master DataSource 에만 수행한다. slave 는 master 의 복제본이므로
+     * 별도 초기화가 불필요하다.
      */
     @Override
-    public synchronized void register(TenantId tenantId, DataSourceSpec spec) {
-        Map<String, DataSource> snapshot = registry.registerAndSnapshot(tenantId, spec);
-        schemaInitializer.initialize(registry.get(tenantId));
+    public synchronized void register(TenantId tenantId, DataSourceSpec masterSpec, DataSourceSpec slaveSpec) {
+        Map<String, DataSource> snapshot = registry.registerAndSnapshot(tenantId, masterSpec, slaveSpec);
+        schemaInitializer.initialize(registry.getMaster(tenantId));
         routingDataSource.refresh(snapshot);
     }
 
     /**
      * 테넌트 DataSource 를 라우팅 테이블에서 즉시 제거하고,
      * 진행 중인 HTTP 요청과 DB 커넥션이 완료된 후 HikariCP 풀을 비동기로 종료한다.
-     *
-     * <pre>
-     *   ① unregisterAndSnapshot()         — 레지스트리 원자적 제거
-     *   ② routingDataSource.refresh()     — 신규 요청 즉시 거부 (동기)
-     *   ③ softEvictConnections()           — 유휴 커넥션 즉시 반납  (동기)
-     *   ④ drainExecutor 태스크 예약        — synchronized 블록 반환
-     *      └─ [Virtual Thread]
-     *           while (httpRequests > 0 || dbConns > 0 &amp;&amp; !timeout) { park }
-     *           hikari.close()
-     *           requestTracker.remove()
-     * </pre>
      */
     @Override
     public synchronized void deregister(TenantId tenantId) {
         UnregisterResult result = registry.unregisterAndSnapshot(tenantId);
-        routingDataSource.refresh(result.snapshot());       // ① 신규 요청 즉시 차단
-        scheduleGracefulDrain(tenantId, result.removed()); // ② 비동기 드레인 예약 후 즉시 반환
+        routingDataSource.refresh(result.snapshot());
+        scheduleGracefulDrain(tenantId, result.removed());
     }
 
     @Override
@@ -147,61 +132,64 @@ public class TenantDataSourceAdapter implements TenantDataSourcePort {
     // ── 비동기 드레인 ─────────────────────────────────────────────────────────
 
     /**
-     * 유휴 커넥션을 즉시 회수하고, Virtual Thread 에서 드레인 루프를 시작한다.
+     * 모든 풀의 유휴 커넥션을 즉시 회수하고, Virtual Thread 에서 드레인 루프를 시작한다.
      *
-     * <p>이 메서드는 {@code synchronized deregister} 안에서 호출되지만,
-     * {@code drainExecutor.execute()} 는 태스크를 큐에 넣고 즉시 반환한다.
-     * 드레인 루프는 락 밖에서 실행되므로 다른 등록/해제 요청을 차단하지 않는다.
+     * @param dataSources 종료할 DataSource 목록 (master + slave)
      */
-    private void scheduleGracefulDrain(TenantId tenantId, DataSource dataSource) {
-        if (!(dataSource instanceof HikariDataSource hikari) || hikari.isClosed()) return;
+    private void scheduleGracefulDrain(TenantId tenantId, List<DataSource> dataSources) {
+        List<HikariDataSource> hikariPools = dataSources.stream()
+                .filter(ds -> ds instanceof HikariDataSource)
+                .map(ds -> (HikariDataSource) ds)
+                .filter(h -> !h.isClosed())
+                .toList();
 
-        HikariPoolMXBean mxBean = hikari.getHikariPoolMXBean();
-        if (mxBean == null) {
-            // 풀이 아직 초기화되지 않았거나 이미 종료된 경우 — 바로 close
-            forceClose(tenantId, hikari);
-            return;
+        if (hikariPools.isEmpty()) return;
+
+        for (HikariDataSource hikari : hikariPools) {
+            HikariPoolMXBean mxBean = hikari.getHikariPoolMXBean();
+            if (mxBean == null) {
+                forceClose(tenantId, hikari);
+                continue;
+            }
+            mxBean.softEvictConnections();
         }
 
-        // HikariCP 7: softEvictConnections() 는 HikariPoolMXBean 의 메서드로 이동
-        // 유휴 커넥션 즉시 반납 + 사용 중 커넥션은 "반환 시 종료" 플래그 설정
-        mxBean.softEvictConnections();
+        int totalInitialConns = hikariPools.stream().mapToInt(this::activeConnections).sum();
         log.info("드레인 시작: tenantId={}, httpRequests={}, dbConnections={}",
-                 tenantId.value(),
-                 requestTracker.activeRequests(tenantId),
-                 mxBean.getActiveConnections());
+                tenantId.value(),
+                requestTracker.activeRequests(tenantId),
+                totalInitialConns);
 
         drainExecutor.execute(() -> {
             try {
-                waitUntilDrained(tenantId, hikari);
+                waitUntilDrained(tenantId, hikariPools);
             } finally {
-                forceClose(tenantId, hikari);  // 드레인 완료 또는 타임아웃 시 반드시 종료
+                hikariPools.forEach(h -> forceClose(tenantId, h));
+                requestTracker.remove(tenantId);
             }
         });
     }
 
     /**
-     * HTTP 요청 카운터와 DB 활성 커넥션 수가 모두 0이 될 때까지 폴링한다.
-     *
-     * <p>타임아웃 만료 시 경고 로그만 남기고 반환한다. 실제 종료는 {@code forceClose()} 에서 처리한다.
+     * HTTP 요청 카운터와 전체 풀의 활성 커넥션 합산이 모두 0이 될 때까지 폴링한다.
      */
-    private void waitUntilDrained(TenantId tenantId, HikariDataSource hikari) {
+    private void waitUntilDrained(TenantId tenantId, List<HikariDataSource> pools) {
         long deadline = System.nanoTime() + drainTimeout.toNanos();
 
         while (System.nanoTime() < deadline) {
             int httpRequests = requestTracker.activeRequests(tenantId);
-            int dbConns      = activeConnections(hikari);
+            int dbConns      = pools.stream().mapToInt(this::activeConnections).sum();
 
             if (httpRequests == 0 && dbConns == 0) {
                 log.info("드레인 완료: tenantId={}", tenantId.value());
                 return;
             }
             log.debug("드레인 중: tenantId={}, httpRequests={}, dbConnections={}",
-                      tenantId.value(), httpRequests, dbConns);
+                    tenantId.value(), httpRequests, dbConns);
             LockSupport.parkNanos(pollInterval.toNanos());
         }
         log.warn("드레인 타임아웃({}s): tenantId={} — 강제 종료",
-                 drainTimeout.toSeconds(), tenantId.value());
+                drainTimeout.toSeconds(), tenantId.value());
     }
 
     private void forceClose(TenantId tenantId, HikariDataSource hikari) {
@@ -209,21 +197,16 @@ public class TenantDataSourceAdapter implements TenantDataSourcePort {
             hikari.close();
             log.info("HikariCP 풀 종료: tenantId={}, pool={}", tenantId.value(), hikari.getPoolName());
         }
-        // HTTP 요청 카운터 항목 제거 — 메모리 누수 방지
-        requestTracker.remove(tenantId);
     }
 
     /** MXBean 이 null 인 엣지 케이스 방어 (풀 초기화 전 또는 종료 후) */
-    private static int activeConnections(HikariDataSource hikari) {
+    private int activeConnections(HikariDataSource hikari) {
         HikariPoolMXBean mxBean = hikari.getHikariPoolMXBean();
         return (mxBean != null) ? mxBean.getActiveConnections() : 0;
     }
 
     /**
      * 애플리케이션 종료 시 진행 중인 드레인 작업이 완료될 때까지 대기한다.
-     *
-     * <p>Spring의 {@code Lifecycle} 처리 후에 호출되므로, 이 시점에는 이미
-     * 신규 요청이 차단된 상태이다. 잔여 드레인 태스크를 완전히 끝낸 후 JVM 이 종료된다.
      */
     @PreDestroy
     public void shutdownDrainExecutor() {

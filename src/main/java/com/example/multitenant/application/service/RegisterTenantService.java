@@ -29,17 +29,20 @@ public class RegisterTenantService implements RegisterTenantUseCase {
     @Transactional
     public RegisterTenantResult register(RegisterTenantCommand command) {
         TenantId id = new TenantId(command.tenantId());
-        DataSourceSpec spec = new DataSourceSpec(
+        DataSourceSpec masterSpec = new DataSourceSpec(
                 command.url(), command.username(), command.password()
         );
+        DataSourceSpec slaveSpec = command.slave() != null
+                ? new DataSourceSpec(command.slave().url(), command.slave().username(), command.slave().password())
+                : null;
 
         if (persistencePort.existsById(id)) {
             throw new TenantAlreadyExistsException(id);
         }
 
-        Tenant tenant = Tenant.create(id, spec);
+        Tenant tenant = Tenant.create(id, masterSpec, slaveSpec);
         persistencePort.save(tenant);
-        dataSourcePort.register(id, spec);
+        dataSourcePort.register(id, masterSpec, slaveSpec);
 
         return RegisterTenantResult.from(tenant);
     }

@@ -7,26 +7,33 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 멀티테넌트 DataSource 등록기
+ * 멀티테넌트 DataSource 등록기.
  *
- * <p><b>스레드 안전성</b><br>
+ * <h2>키 체계</h2>
+ * 각 테넌트의 DataSource 는 복합 키로 관리된다.
+ * <ul>
+ *   <li>{@code "tenant-a:master"} — 쓰기 트랜잭션용 master DataSource</li>
+ *   <li>{@code "tenant-a:slave"}  — 읽기 전용 트랜잭션용 slave DataSource (옵션)</li>
+ * </ul>
+ *
+ * <h2>스레드 안전성</h2>
  * {@link #registerAndSnapshot} 은 DataSource 등록과 스냅샷 포착을 원자적으로 수행한다.
- * 이를 통해 다음 race condition 을 원천 차단한다.
  * <pre>
  *   [버그 패턴]
- *   Thread A: register("a") → snapshot = {a}     ← stale
- *   Thread B: register("b") → snapshot = {a, b}
- *   Thread B: refresh({a, b}) ✓
- *   Thread A: refresh({a})   ✗  → b 소멸
+ *   Thread A: register("a") → snapshot = {"a:master"}     ← stale
+ *   Thread B: register("b") → snapshot = {"a:master", "b:master"}
+ *   Thread B: refresh({a:master, b:master}) ✓
+ *   Thread A: refresh({a:master})   ✗  → b 소멸
  *
  *   [수정 후]
- *   Thread A: synchronized { register("a"); snapshot = {a} }
- *   Thread B: synchronized { register("b"); snapshot = {a, b} }
- *   → 두 refresh 가 어떤 순서로 실행되든 나중 snapshot 이 항상 전체를 포함
+ *   Thread A: synchronized { register("a"); snapshot = {"a:master"} }
+ *   Thread B: synchronized { register("b"); snapshot = {"a:master", "b:master"} }
  * </pre>
  *
  * @author gihyung.lee
@@ -40,54 +47,63 @@ public class TenantDataSourceRegistry {
     /**
      * 테넌트 DataSource 를 등록하고, 등록 완료된 전체 맵의 스냅샷을 원자적으로 반환한다.
      *
-     * <p>{@code synchronized} 블록 안에서 put 과 copyOf 를 연속 실행하므로
-     * 두 작업 사이에 다른 스레드가 끼어들어 stale snapshot 이 생성되는 것을 방지한다.
-     *
      * <p>HikariDataSource 생성은 시간이 걸리므로 lock 범위를 최소화하기 위해
      * 먼저 생성한 뒤 임계 영역에서 등록한다.
      *
+     * @param masterSpec master DataSource 접속 정보
+     * @param slaveSpec  slave DataSource 접속 정보. null 이면 master 단독 운영.
      * @return 이 등록을 포함한 현재 전체 DataSource 맵의 불변 스냅샷
      */
-    public Map<String, DataSource> registerAndSnapshot(TenantId tenantId, DataSourceSpec spec) {
-        DataSource dataSource = createDataSource(tenantId, spec); // lock 밖에서 생성 (시간 소요)
+    public Map<String, DataSource> registerAndSnapshot(TenantId tenantId,
+                                                       DataSourceSpec masterSpec,
+                                                       DataSourceSpec slaveSpec) {
+        DataSource masterDs = createDataSource(masterKey(tenantId), masterSpec);
+        DataSource slaveDs  = slaveSpec != null ? createDataSource(slaveKey(tenantId), slaveSpec) : null;
+
         synchronized (this) {
-            dataSourceMap.put(tenantId.value(), dataSource);
-            return Map.copyOf(dataSourceMap);               // put + copyOf 가 원자적
+            dataSourceMap.put(masterKey(tenantId), masterDs);
+            if (slaveDs != null) {
+                dataSourceMap.put(slaveKey(tenantId), slaveDs);
+            }
+            return Map.copyOf(dataSourceMap);
         }
     }
 
     /**
-     * 테넌트 DataSource 를 제거하고, 제거 후 전체 맵의 스냅샷을 원자적으로 반환한다.
+     * 테넌트 DataSource(master + slave)를 제거하고, 제거 후 전체 맵의 스냅샷을 원자적으로 반환한다.
      *
-     * <p>제거된 DataSource 는 {@link UnregisterResult#removed()} 로 반환된다.
-     * HikariCP 풀 종료는 락 보유 시간 최소화를 위해 호출자(어댑터)가 락 밖에서 처리한다.
-     * 라우팅 테이블 갱신({@code routingDataSource.refresh}) 이후 풀을 종료해야
-     * 신규 요청이 닫힌 풀에 도달하는 찰나의 창을 없앨 수 있기 때문이다.
+     * <p>제거된 DataSource 목록은 {@link UnregisterResult#removed()} 로 반환된다.
+     * HikariCP 풀 종료는 호출자(어댑터)가 락 밖에서 처리한다.
      *
-     * @return 제거 후 스냅샷 + 제거된 DataSource (미등록 테넌트면 removed = null)
+     * @return 제거 후 스냅샷 + 제거된 DataSource 목록
      */
     public UnregisterResult unregisterAndSnapshot(TenantId tenantId) {
         synchronized (this) {
-            DataSource removed = dataSourceMap.remove(tenantId.value());
-            return new UnregisterResult(Map.copyOf(dataSourceMap), removed);
+            List<DataSource> removed = new ArrayList<>();
+            DataSource master = dataSourceMap.remove(masterKey(tenantId));
+            DataSource slave  = dataSourceMap.remove(slaveKey(tenantId));
+            if (master != null) removed.add(master);
+            if (slave  != null) removed.add(slave);
+            return new UnregisterResult(Map.copyOf(dataSourceMap), List.copyOf(removed));
         }
     }
 
     public boolean isRegistered(TenantId tenantId) {
-        return dataSourceMap.containsKey(tenantId.value());
+        return dataSourceMap.containsKey(masterKey(tenantId));
     }
 
-    /** 등록된 DataSource 반환. 없으면 {@code null} */
-    public DataSource get(TenantId tenantId) {
-        return dataSourceMap.get(tenantId.value());
+    /** master DataSource 반환. 없으면 {@code null} */
+    public DataSource getMaster(TenantId tenantId) {
+        return dataSourceMap.get(masterKey(tenantId));
     }
 
-    /** 현재 등록된 테넌트 DataSource 수 — Micrometer Gauge 등록에 사용 */
+    /** 현재 등록된 테넌트 수 — master 키만 카운트한다. Micrometer Gauge 에 사용. */
     public int size() {
-        return dataSourceMap.size();
+        return (int) dataSourceMap.keySet().stream()
+                .filter(k -> k.endsWith(":master"))
+                .count();
     }
 
-    // RoutingDataSource 초기 로딩(SmartInitializingSingleton) 전용
     public Map<String, DataSource> snapshot() {
         return Map.copyOf(dataSourceMap);
     }
@@ -96,11 +112,18 @@ public class TenantDataSourceRegistry {
      * {@link #unregisterAndSnapshot} 의 반환 타입.
      *
      * @param snapshot 제거 후 전체 DataSource 맵의 불변 스냅샷
-     * @param removed  제거된 DataSource (미등록 테넌트면 {@code null})
+     * @param removed  제거된 DataSource 목록 (master + slave, 미등록 테넌트면 빈 리스트)
      */
-    public record UnregisterResult(Map<String, DataSource> snapshot, DataSource removed) {}
+    public record UnregisterResult(Map<String, DataSource> snapshot, List<DataSource> removed) {}
 
-    private HikariDataSource createDataSource(TenantId tenantId, DataSourceSpec spec) {
+    // ── 키 생성 ─────────────────────────────────────────────────────────────
+
+    static String masterKey(TenantId id) { return id.value() + ":master"; }
+    static String slaveKey(TenantId id)  { return id.value() + ":slave"; }
+
+    // ── DataSource 생성 ──────────────────────────────────────────────────────
+
+    private HikariDataSource createDataSource(String poolName, DataSourceSpec spec) {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(spec.url());
         config.setUsername(spec.username());
@@ -108,7 +131,7 @@ public class TenantDataSourceRegistry {
         config.setMaximumPoolSize(5);
         config.setMinimumIdle(1);
         config.setConnectionTimeout(3000);
-        config.setPoolName("HikariPool-" + tenantId.value());
+        config.setPoolName("HikariPool-" + poolName);
         return new HikariDataSource(config);
     }
 }

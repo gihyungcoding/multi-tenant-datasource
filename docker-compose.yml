@@ -9,7 +9,7 @@ services:
     ports:
       - "5432:5432"
 
-  # 테넌트 A DB
+  # 테넌트 A DB (master)
   tenant-a-db:
     image: postgres:16-alpine
     environment:
@@ -19,7 +19,17 @@ services:
     ports:
       - "5433:5432"
 
-  # 테넌트 B DB
+  # 테넌트 A DB (slave) — 읽기 전용 라우팅 테스트용
+  tenant-a-slave-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tenant_a_slave
+      POSTGRES_USER: tenant_a
+      POSTGRES_PASSWORD: tenant_a
+    ports:
+      - "5435:5432"
+
+  # 테넌트 B DB (master)
   tenant-b-db:
     image: postgres:16-alpine
     environment:
@@ -28,3 +38,13 @@ services:
       POSTGRES_PASSWORD: tenant_b
     ports:
       - "5434:5432"
+
+  # 테넌트 B DB (slave) — 읽기 전용 라우팅 테스트용
+  tenant-b-slave-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tenant_b_slave
+      POSTGRES_USER: tenant_b
+      POSTGRES_PASSWORD: tenant_b
+    ports:
+      - "5436:5432"

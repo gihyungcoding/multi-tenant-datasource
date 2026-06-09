@@ -41,7 +41,7 @@ class SuspendTenantServiceTest {
 
     private Tenant activeTenant() {
         return Tenant.create(ID, new DataSourceSpec(
-                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"));
+                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), null);
     }
 
     private Tenant suspendedTenant() {

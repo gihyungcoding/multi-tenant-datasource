@@ -36,7 +36,8 @@ class ResolveTenantDataSourceServiceTest {
     private static Tenant activeTenant(String id) {
         return Tenant.create(
                 new TenantId(id),
-                new DataSourceSpec("jdbc:postgresql://localhost/db", "user", "pass")
+                new DataSourceSpec("jdbc:postgresql://localhost/db", "user", "pass"),
+                null
         );
     }
 

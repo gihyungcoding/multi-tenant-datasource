@@ -69,7 +69,7 @@ class RegisterTenantServiceTest {
 
         service.register(VALID_COMMAND);
 
-        verify(dataSourcePort, times(1)).register(any(), any());
+        verify(dataSourcePort, times(1)).register(any(), any(), any());
     }
 
     // ── 중복 등록 ──────────────────────────────────────────────
@@ -103,6 +103,6 @@ class RegisterTenantServiceTest {
         assertThatThrownBy(() -> service.register(VALID_COMMAND))
                 .isInstanceOf(TenantAlreadyExistsException.class);
 
-        verify(dataSourcePort, never()).register(any(), any());
+        verify(dataSourcePort, never()).register(any(), any(), any());
     }
 }

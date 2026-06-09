@@ -123,12 +123,13 @@ class TenantDatasourceGaugeTest {
     /**
      * 실제 DB 연결 없이 내부 맵에 더미 DataSource 를 직접 삽입한다.
      * Gauge 는 {@code registry.size()} 만 읽으므로 DataSource 구현체는 무관하다.
+     * 키는 복합 키 형식({@code "tenantId:master"})을 사용한다.
      */
     @SuppressWarnings("unchecked")
     private void injectDataSource(String tenantId) {
         Map<String, Object> map = (Map<String, Object>)
                 ReflectionTestUtils.getField(registry, "dataSourceMap");
-        map.put(tenantId, new StubDataSource());
+        map.put(tenantId + ":master", new StubDataSource());
     }
 
     /** HikariCP 연결 없이 size() 계산만 가능하게 하는 최소 stub */

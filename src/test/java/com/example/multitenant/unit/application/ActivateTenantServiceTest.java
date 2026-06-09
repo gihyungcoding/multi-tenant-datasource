@@ -40,14 +40,14 @@ class ActivateTenantServiceTest {
 
     private Tenant suspendedTenant() {
         Tenant t = Tenant.create(ID, new DataSourceSpec(
-                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"));
+                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), null);
         t.suspend("유지보수");
         return t;
     }
 
     private Tenant activeTenant() {
         return Tenant.create(ID, new DataSourceSpec(
-                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"));
+                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), null);
     }
 
     // ── 정상 재활성화 ──────────────────────────────────────────
@@ -80,7 +80,7 @@ class ActivateTenantServiceTest {
 
         service.activate(new ActivateTenantCommand(TENANT_ID));
 
-        verify(dataSourcePort, times(1)).register(any(), any());
+        verify(dataSourcePort, times(1)).register(any(), any(), any());
     }
 
     // ── 예외 시나리오 ──────────────────────────────────────────
@@ -111,6 +111,6 @@ class ActivateTenantServiceTest {
         assertThatThrownBy(() -> service.activate(new ActivateTenantCommand(TENANT_ID)))
                 .isInstanceOf(TenantAlreadyActiveException.class);
 
-        verify(dataSourcePort, never()).register(any(), any());
+        verify(dataSourcePort, never()).register(any(), any(), any());
     }
 }

@@ -9,6 +9,12 @@ public record RegisterTenantCommand(
         String tenantId,
         String url,
         String username,
-        String password
+        String password,
+        SlaveSpec slave  // null 이면 slave 미구성
 ) {
+    public RegisterTenantCommand(String tenantId, String url, String username, String password) {
+        this(tenantId, url, username, password, null);
+    }
+
+    public record SlaveSpec(String url, String username, String password) {}
 }
