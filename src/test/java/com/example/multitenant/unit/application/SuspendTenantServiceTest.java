@@ -19,6 +19,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import java.util.List;
 
 /**
  * {@link SuspendTenantService} 단위 테스트.
@@ -41,7 +42,7 @@ class SuspendTenantServiceTest {
 
     private Tenant activeTenant() {
         return Tenant.create(ID, new DataSourceSpec(
-                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), null);
+                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), List.of());
     }
 
     private Tenant suspendedTenant() {

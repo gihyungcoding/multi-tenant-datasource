@@ -9,6 +9,8 @@ import com.example.multitenant.domain.tenant.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * 테넌트 등록 비즈니스 구현
  * @author gihyung.lee
@@ -32,17 +34,17 @@ public class RegisterTenantService implements RegisterTenantUseCase {
         DataSourceSpec masterSpec = new DataSourceSpec(
                 command.url(), command.username(), command.password()
         );
-        DataSourceSpec slaveSpec = command.slave() != null
-                ? new DataSourceSpec(command.slave().url(), command.slave().username(), command.slave().password())
-                : null;
+        List<DataSourceSpec> slaveSpecs = command.slaves().stream()
+                .map(s -> new DataSourceSpec(s.url(), s.username(), s.password()))
+                .toList();
 
         if (persistencePort.existsById(id)) {
             throw new TenantAlreadyExistsException(id);
         }
 
-        Tenant tenant = Tenant.create(id, masterSpec, slaveSpec);
+        Tenant tenant = Tenant.create(id, masterSpec, slaveSpecs);
         persistencePort.save(tenant);
-        dataSourcePort.register(id, masterSpec, slaveSpec);
+        dataSourcePort.register(id, masterSpec, slaveSpecs);
 
         return RegisterTenantResult.from(tenant);
     }

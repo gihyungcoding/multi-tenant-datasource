@@ -1,5 +1,7 @@
 services:
-  # 마스터 DB — 테넌트 목록 저장, 관리
+
+  # ── 마스터 DB ─────────────────────────────────────────────────────────────────
+  # 테넌트 메타데이터(접속 정보·상태)를 저장하는 관리 DB
   master-db:
     image: postgres:16-alpine
     environment:
@@ -8,43 +10,94 @@ services:
       POSTGRES_PASSWORD: master
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U master"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # 테넌트 A DB (master)
+  # ── 테넌트 A ──────────────────────────────────────────────────────────────────
+  # bitnami/postgresql 이미지: POSTGRESQL_REPLICATION_MODE 환경변수만으로 Streaming Replication 구성
   tenant-a-db:
-    image: postgres:16-alpine
+    image: bitnami/postgresql:16
     environment:
-      POSTGRES_DB: tenant_a
-      POSTGRES_USER: tenant_a
-      POSTGRES_PASSWORD: tenant_a
+      POSTGRESQL_USERNAME: tenant_a
+      POSTGRESQL_PASSWORD: tenant_a
+      POSTGRESQL_DATABASE: tenant_a
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: replicator
+      POSTGRESQL_REPLICATION_PASSWORD: replicator_pass
     ports:
       - "5433:5432"
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/postgresql/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
-  # 테넌트 A DB (slave) — 읽기 전용 라우팅 테스트용
+  # tenant-a의 Streaming Replica — WAL 스트림으로 master DDL·데이터 자동 동기화
+  # read-only. 앱에서 직접 DDL을 실행하지 않는다.
   tenant-a-slave-db:
-    image: postgres:16-alpine
+    image: bitnami/postgresql:16
     environment:
-      POSTGRES_DB: tenant_a_slave
-      POSTGRES_USER: tenant_a
-      POSTGRES_PASSWORD: tenant_a
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_REPLICATION_USER: replicator
+      POSTGRESQL_REPLICATION_PASSWORD: replicator_pass
+      POSTGRESQL_MASTER_HOST: tenant-a-db
+      POSTGRESQL_MASTER_PORT_NUMBER: 5432
+      POSTGRESQL_USERNAME: tenant_a
+      POSTGRESQL_PASSWORD: tenant_a
     ports:
       - "5435:5432"
+    depends_on:
+      tenant-a-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/postgresql/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
-  # 테넌트 B DB (master)
+  # ── 테넌트 B ──────────────────────────────────────────────────────────────────
   tenant-b-db:
-    image: postgres:16-alpine
+    image: bitnami/postgresql:16
     environment:
-      POSTGRES_DB: tenant_b
-      POSTGRES_USER: tenant_b
-      POSTGRES_PASSWORD: tenant_b
+      POSTGRESQL_USERNAME: tenant_b
+      POSTGRESQL_PASSWORD: tenant_b
+      POSTGRESQL_DATABASE: tenant_b
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: replicator
+      POSTGRESQL_REPLICATION_PASSWORD: replicator_pass
     ports:
       - "5434:5432"
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/postgresql/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
-  # 테넌트 B DB (slave) — 읽기 전용 라우팅 테스트용
+  # tenant-b의 Streaming Replica
   tenant-b-slave-db:
-    image: postgres:16-alpine
+    image: bitnami/postgresql:16
     environment:
-      POSTGRES_DB: tenant_b_slave
-      POSTGRES_USER: tenant_b
-      POSTGRES_PASSWORD: tenant_b
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_REPLICATION_USER: replicator
+      POSTGRESQL_REPLICATION_PASSWORD: replicator_pass
+      POSTGRESQL_MASTER_HOST: tenant-b-db
+      POSTGRESQL_MASTER_PORT_NUMBER: 5432
+      POSTGRESQL_USERNAME: tenant_b
+      POSTGRESQL_PASSWORD: tenant_b
     ports:
       - "5436:5432"
+    depends_on:
+      tenant-b-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/postgresql/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s

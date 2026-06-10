@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import javax.sql.DataSource;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -101,7 +102,7 @@ class TenantDataSourceAdapterConcurrencyTest {
         @Override
         public Map<String, DataSource> registerAndSnapshot(TenantId tenantId,
                                                            DataSourceSpec masterSpec,
-                                                           DataSourceSpec slaveSpec) {
+                                                           List<DataSourceSpec> slaveSpecs) {
             fakeMap.put(tenantId.value() + ":master", mock(DataSource.class));
             return Map.copyOf(fakeMap);
         }
@@ -143,7 +144,7 @@ class TenantDataSourceAdapterConcurrencyTest {
         @Override
         public Map<String, DataSource> registerAndSnapshot(TenantId tenantId,
                                                            DataSourceSpec masterSpec,
-                                                           DataSourceSpec slaveSpec) {
+                                                           List<DataSourceSpec> slaveSpecs) {
             fakeMap.put(tenantId.value() + ":master", mock(DataSource.class));
             Map<String, DataSource> snap = Map.copyOf(fakeMap); // 스냅샷 즉시 포착
             try {
@@ -193,11 +194,11 @@ class TenantDataSourceAdapterConcurrencyTest {
         @DisplayName("[버그 패턴] routing.refresh(staleSnapshot) 은 라우팅 테이블을 오염시킨다")
         void routingRefresh_withStaleSnapshot_corruptsRoutingTable() {
             // Thread A: tenant-a 등록 직후 stale snapshot 포착
-            fakeRegistry.registerAndSnapshot(new TenantId("tenant-a"), DUMMY_SPEC, null);
+            fakeRegistry.registerAndSnapshot(new TenantId("tenant-a"), DUMMY_SPEC, List.of());
             Map<String, DataSource> staleSnapshot = Map.copyOf(fakeRegistry.snapshot()); // {"tenant-a:master"}
 
             // Thread B: tenant-b 등록 → 올바른 스냅샷으로 refresh 완료
-            fakeRegistry.registerAndSnapshot(new TenantId("tenant-b"), DUMMY_SPEC, null);
+            fakeRegistry.registerAndSnapshot(new TenantId("tenant-b"), DUMMY_SPEC, List.of());
             routing.refresh(fakeRegistry.snapshot()); // {"tenant-a:master", "tenant-b:master"}
             assertThat(routing.routes()).as("Thread B refresh 직후").containsKeys("tenant-a:master", "tenant-b:master");
 
@@ -224,8 +225,8 @@ class TenantDataSourceAdapterConcurrencyTest {
         @Test
         @DisplayName("[수정 검증] 두 테넌트를 순서대로 등록하면 라우팅 테이블에 모두 존재한다")
         void register_twoTenantsSequentially_bothInRoutingTable() {
-            adapter.register(new TenantId("tenant-a"), DUMMY_SPEC, null);
-            adapter.register(new TenantId("tenant-b"), DUMMY_SPEC, null);
+            adapter.register(new TenantId("tenant-a"), DUMMY_SPEC, List.of());
+            adapter.register(new TenantId("tenant-b"), DUMMY_SPEC, List.of());
 
             assertThat(routing.routes())
                     .as("두 테넌트 모두 라우팅 테이블에 존재해야 한다")
@@ -271,7 +272,7 @@ class TenantDataSourceAdapterConcurrencyTest {
                             Thread.currentThread().interrupt();
                             return;
                         }
-                        racyAdapter.register(new TenantId(tenantId), DUMMY_SPEC, null);
+                        racyAdapter.register(new TenantId(tenantId), DUMMY_SPEC, List.of());
                         done.countDown();
                     });
                 }

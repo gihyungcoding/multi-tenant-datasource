@@ -373,7 +373,7 @@ class TenantDataSourceAdapterDrainTest {
         }
 
         // deregister 흐름에서 사용되지 않는 메서드들 — 안전한 기본값 반환
-        @Override public Map<String, DataSource> registerAndSnapshot(TenantId id, DataSourceSpec m, DataSourceSpec s) { return Map.of(); }
+        @Override public Map<String, DataSource> registerAndSnapshot(TenantId id, DataSourceSpec m, List<DataSourceSpec> s) { return Map.of(); }
         @Override public Map<String, DataSource> snapshot()               { return Map.of(); }
         @Override public DataSource             getMaster(TenantId id)   { return stored; }
         @Override public boolean                isRegistered(TenantId id) { return false; }

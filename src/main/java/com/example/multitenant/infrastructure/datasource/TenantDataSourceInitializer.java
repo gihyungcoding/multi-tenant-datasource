@@ -35,7 +35,7 @@ public class TenantDataSourceInitializer implements SmartInitializingSingleton  
             dataSourcePort.register(
                     tenant.getId(),
                     tenant.getDataSourceSpec(),
-                    tenant.getSlaveDataSourceSpec()
+                    tenant.getSlaveSpecs()
             );
             log.info("테넌트 등록: {}", tenant.getId());
         });

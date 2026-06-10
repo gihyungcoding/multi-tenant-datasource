@@ -1,6 +1,7 @@
 package com.example.multitenant.domain.tenant;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 테넌트 애그리거트 루트
@@ -11,15 +12,15 @@ public class Tenant {
 
     private final TenantId id;
     private final DataSourceSpec dataSourceSpec;
-    private final DataSourceSpec slaveDataSourceSpec; // null 이면 master 단일 구성
+    private final List<DataSourceSpec> slaveSpecs; // 비어있으면 master 단독 구성
     private TenantStatus status;
     private LocalDateTime createdAt;
 
-    private Tenant(TenantId id, DataSourceSpec dataSourceSpec, DataSourceSpec slaveDataSourceSpec,
+    private Tenant(TenantId id, DataSourceSpec dataSourceSpec, List<DataSourceSpec> slaveSpecs,
                    TenantStatus status, LocalDateTime createdAt) {
         this.id = id;
         this.dataSourceSpec = dataSourceSpec;
-        this.slaveDataSourceSpec = slaveDataSourceSpec;
+        this.slaveSpecs = List.copyOf(slaveSpecs);
         this.status = status;
         this.createdAt = createdAt;
     }
@@ -32,9 +33,12 @@ public class Tenant {
         return dataSourceSpec;
     }
 
-    /** null 이면 slave 미구성 → master 단독 운영 */
-    public DataSourceSpec getSlaveDataSourceSpec() {
-        return slaveDataSourceSpec;
+    /**
+     * slave DataSource 접속 정보 목록.
+     * 비어있으면 slave 미구성 → master 단독 운영.
+     */
+    public List<DataSourceSpec> getSlaveSpecs() {
+        return slaveSpecs;
     }
 
     public TenantStatus getStatus() {
@@ -46,8 +50,8 @@ public class Tenant {
     }
 
     // 생성 팩토리 메서드 — 최초 등록 시 사용. createdAt 을 현재 시각으로 설정한다.
-    public static Tenant create(TenantId id, DataSourceSpec masterSpec, DataSourceSpec slaveSpec) {
-        return new Tenant(id, masterSpec, slaveSpec, new TenantStatus.Active(), LocalDateTime.now());
+    public static Tenant create(TenantId id, DataSourceSpec masterSpec, List<DataSourceSpec> slaveSpecs) {
+        return new Tenant(id, masterSpec, slaveSpecs, new TenantStatus.Active(), LocalDateTime.now());
     }
 
     /**
@@ -56,9 +60,9 @@ public class Tenant {
      * <p>{@link #create} 와 달리 모든 필드를 인자로 받으므로
      * {@code createdAt} 이 로드 시점의 현재 시각으로 덮어씌워지는 버그를 방지한다.
      */
-    public static Tenant restore(TenantId id, DataSourceSpec masterSpec, DataSourceSpec slaveSpec,
+    public static Tenant restore(TenantId id, DataSourceSpec masterSpec, List<DataSourceSpec> slaveSpecs,
                                  TenantStatus status, LocalDateTime createdAt) {
-        return new Tenant(id, masterSpec, slaveSpec, status, createdAt);
+        return new Tenant(id, masterSpec, slaveSpecs, status, createdAt);
     }
 
     /**

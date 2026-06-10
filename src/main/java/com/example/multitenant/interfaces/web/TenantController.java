@@ -20,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
+import java.util.List;
 
 /**
  * 멀티 테넌트 관리 endpoint
@@ -57,13 +58,14 @@ public class TenantController {
     @PostMapping
     public ResponseEntity<ApiResponse<RegisterTenantResult>> register(
             @Valid @RequestBody RegisterTenantRequest request) {
-        RegisterTenantCommand.SlaveSpec slaveSpec = request.slave() != null
-                ? new RegisterTenantCommand.SlaveSpec(
-                        request.slave().url(), request.slave().username(), request.slave().password())
-                : null;
+        List<RegisterTenantCommand.SlaveSpec> slaveSpecs = request.slaves() != null
+                ? request.slaves().stream()
+                        .map(s -> new RegisterTenantCommand.SlaveSpec(s.url(), s.username(), s.password()))
+                        .toList()
+                : List.of();
         RegisterTenantResult result = registerUseCase.register(
                 new RegisterTenantCommand(request.tenantId(), request.url(),
-                        request.username(), request.password(), slaveSpec));
+                        request.username(), request.password(), slaveSpecs));
 
         return ResponseEntity
                 .created(URI.create("/api/tenants/" + result.tenantId()))

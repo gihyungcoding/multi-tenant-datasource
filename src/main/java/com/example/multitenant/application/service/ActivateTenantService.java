@@ -51,7 +51,7 @@ public class ActivateTenantService implements ActivateTenantUseCase {
 
         tenant.activate();                                                                        // 도메인 규칙 검증 + 상태 전환
         persistencePort.save(tenant);                                                             // 마스터 DB 커밋 (트랜잭션 내)
-        dataSourcePort.register(id, tenant.getDataSourceSpec(), tenant.getSlaveDataSourceSpec()); // 풀 재생성 + 라우팅 추가
+        dataSourcePort.register(id, tenant.getDataSourceSpec(), tenant.getSlaveSpecs()); // 풀 재생성 + 라우팅 추가
 
         return ActivateTenantResult.from(tenant);
     }

@@ -19,6 +19,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import java.util.List;
 
 /**
  * {@link ActivateTenantService} 단위 테스트.
@@ -40,14 +41,14 @@ class ActivateTenantServiceTest {
 
     private Tenant suspendedTenant() {
         Tenant t = Tenant.create(ID, new DataSourceSpec(
-                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), null);
+                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), List.of());
         t.suspend("유지보수");
         return t;
     }
 
     private Tenant activeTenant() {
         return Tenant.create(ID, new DataSourceSpec(
-                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), null);
+                "jdbc:postgresql://localhost:5432/tenant_a", "user", "pass"), List.of());
     }
 
     // ── 정상 재활성화 ──────────────────────────────────────────

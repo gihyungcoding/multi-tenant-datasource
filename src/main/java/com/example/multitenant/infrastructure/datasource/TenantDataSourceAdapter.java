@@ -38,7 +38,7 @@ import java.util.concurrent.locks.LockSupport;
  * {@link #waitUntilDrained} 는 두 가지 카운터가 동시에 0이 될 때 종료한다.
  * <ul>
  *   <li>HTTP 요청 카운터: {@link TenantRequestTracker#activeRequests} — 진행 중인 HTTP 요청</li>
- *   <li>DB 커넥션 카운터: master + slave 풀의 활성 커넥션 합산</li>
+ *   <li>DB 커넥션 카운터: master + 모든 slave 풀의 활성 커넥션 합산</li>
  * </ul>
  *
  * <h2>synchronized 범위</h2>
@@ -96,14 +96,18 @@ public class TenantDataSourceAdapter implements TenantDataSourcePort {
     }
 
     /**
-     * 테넌트 DataSource(master + 옵션 slave) 를 등록하고 라우팅 테이블을 갱신한다.
+     * 테넌트 DataSource(master + 복수 slave) 를 등록하고 라우팅 테이블을 갱신한다.
      *
-     * <p>스키마 초기화는 master DataSource 에만 수행한다. slave 는 master 의 복제본이므로
-     * 별도 초기화가 불필요하다.
+     * <h3>스키마 초기화 전략</h3>
+     * <ul>
+     *   <li><b>master</b>: {@link TenantSchemaInitializer#initialize} — 반드시 성공해야 한다.</li>
+     *   <li><b>slave</b>: Streaming Replica 이므로 DDL 을 실행하지 않는다.
+     *       스키마는 PostgreSQL WAL 스트림을 통해 master 에서 자동으로 전파된다.</li>
+     * </ul>
      */
     @Override
-    public synchronized void register(TenantId tenantId, DataSourceSpec masterSpec, DataSourceSpec slaveSpec) {
-        Map<String, DataSource> snapshot = registry.registerAndSnapshot(tenantId, masterSpec, slaveSpec);
+    public synchronized void register(TenantId tenantId, DataSourceSpec masterSpec, List<DataSourceSpec> slaveSpecs) {
+        Map<String, DataSource> snapshot = registry.registerAndSnapshot(tenantId, masterSpec, slaveSpecs);
         schemaInitializer.initialize(registry.getMaster(tenantId));
         routingDataSource.refresh(snapshot);
     }
@@ -132,9 +136,9 @@ public class TenantDataSourceAdapter implements TenantDataSourcePort {
     // ── 비동기 드레인 ─────────────────────────────────────────────────────────
 
     /**
-     * 모든 풀의 유휴 커넥션을 즉시 회수하고, Virtual Thread 에서 드레인 루프를 시작한다.
+     * 모든 풀(master + 모든 slave)의 유휴 커넥션을 즉시 회수하고, Virtual Thread 에서 드레인 루프를 시작한다.
      *
-     * @param dataSources 종료할 DataSource 목록 (master + slave)
+     * @param dataSources 종료할 DataSource 목록 (master + 모든 slave)
      */
     private void scheduleGracefulDrain(TenantId tenantId, List<DataSource> dataSources) {
         List<HikariDataSource> hikariPools = dataSources.stream()

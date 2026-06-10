@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import java.util.List;
 
 /**
  * {@link ResolveTenantDataSourceService} 단위 테스트.
@@ -37,7 +38,7 @@ class ResolveTenantDataSourceServiceTest {
         return Tenant.create(
                 new TenantId(id),
                 new DataSourceSpec("jdbc:postgresql://localhost/db", "user", "pass"),
-                null
+                List.of()
         );
     }
 
